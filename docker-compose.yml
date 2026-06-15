@@ -1,23 +1,24 @@
 version: "3.9"
 
 services:
-  db:
+  postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-cpg_analytics}
-      POSTGRES_USER: ${POSTGRES_USER:-cpg}
+      POSTGRES_DB:       ${POSTGRES_DB:-cpg_analytics}
+      POSTGRES_USER:     ${POSTGRES_USER:-cpg}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./db/init:/docker-entrypoint-initdb.d:ro   # *.sql run in filename order on first start
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cpg} -d ${POSTGRES_DB:-cpg_analytics}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   api:
     build:
@@ -26,14 +27,15 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cpg}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-cpg_analytics}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-cpg}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-cpg_analytics}
     ports:
       - "8000:8000"
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
     volumes:
       - ./data:/app/data
+    profiles: ["full"]   # only starts with: docker compose --profile full up
 
   ui:
     build:
@@ -47,6 +49,7 @@ services:
       - "8501:8501"
     depends_on:
       - api
+    profiles: ["full"]
 
 volumes:
   pg_data:
