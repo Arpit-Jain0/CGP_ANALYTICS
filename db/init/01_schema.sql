@@ -149,3 +149,26 @@ CREATE TABLE IF NOT EXISTS competitor_prices (
 );
 
 CREATE INDEX IF NOT EXISTS idx_comp_price_cat ON competitor_prices(category, obs_date);
+
+-- ── Forecast results ────────────────────────────────────────────────────────
+-- One row per (run_date, category, region, target_date).
+-- Replacing a run: DELETE WHERE run_date = X AND category = Y AND region = Z,
+-- then re-insert.  The unique constraint prevents silent accumulation.
+CREATE TABLE IF NOT EXISTS forecast_results (
+    forecast_id       SERIAL          PRIMARY KEY,
+    run_date          DATE            NOT NULL,
+    category          TEXT            NOT NULL,
+    region            TEXT            NOT NULL,
+    target_date       DATE            NOT NULL,
+    predicted_revenue NUMERIC(14, 4)  NOT NULL,
+    yhat_lower        NUMERIC(14, 4),
+    yhat_upper        NUMERIC(14, 4),
+    model_version     TEXT            NOT NULL DEFAULT '1.0',
+    created_at        TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    UNIQUE (run_date, category, region, target_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fc_run
+    ON forecast_results (run_date, category, region);
+CREATE INDEX IF NOT EXISTS idx_fc_target
+    ON forecast_results (category, region, target_date);
