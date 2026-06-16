@@ -49,7 +49,6 @@ services:
       - "8501:8501"
     depends_on:
       - api
-    profiles: ["full"]
 
 volumes:
   pg_data:
