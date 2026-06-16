@@ -35,7 +35,7 @@ services:
         condition: service_healthy
     volumes:
       - ./data:/app/data
-    profiles: ["full"]   # only starts with: docker compose --profile full up
+      - ./config:/app/config:ro
 
   ui:
     build:

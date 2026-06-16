@@ -19,7 +19,7 @@ dependencies = [
     "alembic>=1.13",
 
     # API
-    "fastapi>=0.111",
+    "fastapi>=0.137",
     "uvicorn[standard]>=0.29",
     "pydantic>=2.7",
     "pydantic-settings>=2.2",
