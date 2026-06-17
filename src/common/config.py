@@ -29,18 +29,6 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
-    # ── DeepSeek LLM ─────────────────────────────────────────────────────────
-    deepseek_api_key: str = Field(default="", alias="DEEPSEEK_API_KEY")
-    deepseek_base_url: str = Field(
-        default="https://api.deepseek.com/v1", alias="DEEPSEEK_BASE_URL"
-    )
-    deepseek_model: str = Field(default="deepseek-chat", alias="DEEPSEEK_MODEL")
-
-    @property
-    def llm_enabled(self) -> bool:
-        """False when no API key is set; callers must use the deterministic fallback."""
-        return bool(self.deepseek_api_key)
-
     # ── Application ───────────────────────────────────────────────────────────
     app_env: str = Field(default="development", alias="APP_ENV")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
