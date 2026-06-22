@@ -231,8 +231,7 @@ def db_engine():
 
     def _has_sql(fragment: str) -> bool:
         return any(
-            line.strip() and not line.strip().startswith("--")
-            for line in fragment.splitlines()
+            line.strip() and not line.strip().startswith("--") for line in fragment.splitlines()
         )
 
     with engine.connect() as conn:
