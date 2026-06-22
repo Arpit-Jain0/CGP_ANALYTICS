@@ -217,7 +217,6 @@ def test_forecast_rows_query(db_session):
     Rows written to forecast_results are returned correctly by get_forecast_rows.
     """
     from src.api.queries import get_forecast_rows
-    from src.common import db as db_module
 
     run_date = date(2024, 6, 1)
     rows = [
@@ -247,15 +246,15 @@ def test_forecast_rows_query(db_session):
         )
     db_session.commit()
 
-    # Patch get_session to use the test db_session
-    import sqlalchemy.orm as _orm
+    # Patch get_session at the point of use so get_forecast_rows sees the
+    # test session (which already has the committed rows).
+    from contextlib import contextmanager
 
-    def _patched_make(**kw):
-        return _orm.sessionmaker(
-            bind=db_session.bind, **{k: v for k, v in kw.items() if k != "bind"}
-        )
+    @contextmanager
+    def _patched_get_session():
+        yield db_session
 
-    with patch.object(db_module, "SessionLocal", db_session.__class__(bind=db_session.bind)):
+    with patch("src.api.queries.get_session", _patched_get_session):
         result = get_forecast_rows(category="Beverages", region="NORTHEAST", horizon=10)
 
     assert result["run_date"] == run_date
