@@ -190,7 +190,7 @@ def _run_generate(batch_type: str):
     try:
         with st.spinner(f"Generating {batch_type.upper()} batch for week of {_week_mon}…"):
             result = api_client.post_generate_batch(batch_type)
-        st.session_state[f"gen_{batch_type}"] = result
+        st.session_state[f"gen_{batch_type}_result"] = result
     except requests.exceptions.ConnectionError:
         st.error("❌ Cannot reach the API. Is the server running?")
     except requests.exceptions.Timeout:
@@ -212,7 +212,7 @@ if both_btn:
     _run_generate("online")
 
 for _bt in ("pos", "online"):
-    _res = st.session_state.get(f"gen_{_bt}")
+    _res = st.session_state.get(f"gen_{_bt}_result")
     if _res:
         if _res["status"] == "exists":
             st.warning(
