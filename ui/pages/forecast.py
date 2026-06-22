@@ -1,6 +1,7 @@
-"""Page 2 — Forecast: Prophet predictions with confidence band."""
+"""Page 2 — Forecast: Prophet predictions with period selector and forecast report."""
 
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -16,15 +17,13 @@ import api_client
 
 st.title("📈 Revenue Forecast")
 st.caption(
-    "Precomputed Prophet predictions from the database. "
-    "Run `python -m src.forecasting.forecaster` to refresh."
+    "Select a category, region, and forecast period to see Prophet predictions "
+    "with confidence bands. Click **Generate Forecast** to load the report."
 )
 st.divider()
 
 # ── Controls ──────────────────────────────────────────────────────────────────
 
-
-# Fetch summary once to populate dropdowns (no extra endpoint needed)
 @st.cache_data(ttl=300, show_spinner=False)
 def _choices():
     try:
@@ -38,44 +37,83 @@ def _choices():
 
 cats, regs = _choices()
 
-ctrl1, ctrl2, ctrl3 = st.columns([2, 2, 2])
+ctrl1, ctrl2 = st.columns([2, 2])
 
 with ctrl1:
-    cat_options = ["All categories"] + cats
-    selected_cat = st.selectbox("Category", cat_options, index=0)
+    selected_cat = st.selectbox("Category", ["All categories"] + cats)
 
 with ctrl2:
-    reg_options = ["All regions"] + regs
-    selected_reg = st.selectbox("Region", reg_options, index=0)
+    selected_reg = st.selectbox("Region", ["All regions"] + regs)
 
-with ctrl3:
-    horizon = st.slider("Horizon (days)", min_value=7, max_value=180, value=90, step=7)
+# ── Period selector ───────────────────────────────────────────────────────────
 
-run_btn = st.button("Generate Forecast", type="primary", use_container_width=False)
+st.markdown("#### Forecast Period")
 
+PERIOD_OPTIONS = {
+    "This Week (7 days)": 7,
+    "This Month (30 days)": 30,
+    "This Quarter (90 days)": 90,
+    "Next 6 Months (180 days)": 180,
+    "Custom": None,
+}
+
+period_col, custom_col = st.columns([2, 3])
+
+with period_col:
+    selected_period = st.selectbox("Select period", list(PERIOD_OPTIONS.keys()), index=2)
+
+horizon = PERIOD_OPTIONS[selected_period]
+
+if selected_period == "Custom":
+    with custom_col:
+        today = date.today()
+        c1, c2 = st.columns(2)
+        custom_start = c1.date_input("From", value=today, key="fc_start")
+        custom_end = c2.date_input(
+            "To", value=today + timedelta(days=90), key="fc_end", min_value=today
+        )
+        if custom_end > custom_start:
+            horizon = (custom_end - custom_start).days
+        else:
+            st.warning("End date must be after start date.")
+            horizon = 90
+    period_label = f"{custom_start} → {custom_end} ({horizon} days)"
+else:
+    today = date.today()
+    period_label = f"{today} → {today + timedelta(days=horizon)} ({horizon} days)"
+    with custom_col:
+        st.markdown(
+            f"<div style='padding:10px 0 0 0; color:#555;'>📅 {period_label}</div>",
+            unsafe_allow_html=True,
+        )
+
+st.markdown("")
+run_btn = st.button("📊 Generate Forecast", type="primary", use_container_width=False)
 st.divider()
 
-# ── Fetch & plot ──────────────────────────────────────────────────────────────
+# ── Fetch ─────────────────────────────────────────────────────────────────────
 
-if run_btn or "forecast_data" not in st.session_state:
+if run_btn:
     cat_arg = None if selected_cat == "All categories" else selected_cat
     reg_arg = None if selected_reg == "All regions" else selected_reg
 
     try:
-        with st.spinner("Fetching forecast…"):
+        with st.spinner("Fetching forecast data…"):
             data = api_client.get_forecast(
                 category=cat_arg,
                 region=reg_arg,
-                horizon=horizon,
+                horizon=min(horizon, 90),  # model trained at 90-day horizon
             )
         st.session_state["forecast_data"] = data
-        st.session_state["forecast_label"] = (
-            f"{selected_cat} · {selected_reg} · {horizon}-day horizon"
-        )
+        st.session_state["forecast_meta"] = {
+            "cat": selected_cat,
+            "reg": selected_reg,
+            "period": selected_period,
+            "period_label": period_label,
+            "horizon": horizon,
+        }
     except requests.exceptions.ConnectionError:
-        st.error(
-            "❌ Cannot reach the API. Is the server running?  `uvicorn src.api.main:app --port 8000`"
-        )
+        st.error("❌ Cannot reach the API. Is the server running?")
         st.stop()
     except requests.exceptions.Timeout:
         st.error("❌ Request timed out fetching the forecast.")
@@ -94,34 +132,77 @@ if run_btn or "forecast_data" not in st.session_state:
         st.stop()
 
 data = st.session_state.get("forecast_data")
-label = st.session_state.get("forecast_label", "")
+meta = st.session_state.get("forecast_meta", {})
 
 if not data or not data.get("points"):
-    st.info("Select filters above and click **Generate Forecast**.")
+    st.info("Select filters above and click **Generate Forecast** to view predictions.")
     st.stop()
 
-# ── Summary strip ─────────────────────────────────────────────────────────────
+# ── Build dataframe ───────────────────────────────────────────────────────────
 
-p1, p2, p3, p4 = st.columns(4)
+df = pd.DataFrame(data["points"])
+df["target_date"] = pd.to_datetime(df["target_date"])
+df = df.sort_values("target_date").reset_index(drop=True)
+
 points = data["points"]
-revenues = [p["predicted_revenue"] for p in points]
-p1.metric("Run Date", str(data.get("run_date", "—")))
-p2.metric("Model", data.get("model_version", "—"))
-p3.metric("Peak Forecast", f"${max(revenues):,.2f}")
-p4.metric("Avg Forecast", f"${sum(revenues)/len(revenues):,.2f}")
+revenues = df["predicted_revenue"].tolist()
+lowers = df["yhat_lower"].tolist()
+uppers = df["yhat_upper"].tolist()
 
-st.markdown(f"*{label}*  ·  {len(points)} data points")
+total_rev = sum(revenues)
+avg_daily = total_rev / len(revenues)
+peak_idx = revenues.index(max(revenues))
+peak_day = df.loc[peak_idx, "target_date"].strftime("%b %d, %Y")
+peak_val = max(revenues)
+
+# Growth: first-week avg vs last-week avg
+first_week = revenues[:7] if len(revenues) >= 7 else revenues
+last_week = revenues[-7:] if len(revenues) >= 7 else revenues
+avg_start = sum(first_week) / len(first_week)
+avg_end = sum(last_week) / len(last_week)
+growth_pct = ((avg_end - avg_start) / avg_start * 100) if avg_start else 0
+
+# Confidence: average band width as % of predicted revenue
+band_widths = [u - l for u, l in zip(uppers, lowers)]
+avg_band_pct = (sum(band_widths) / len(band_widths)) / avg_daily * 100 if avg_daily else 0
+
+# ── Forecast header ───────────────────────────────────────────────────────────
+
+st.markdown(
+    f"### {meta.get('cat', 'All')} · {meta.get('reg', 'All')}  "
+    f"<span style='font-size:0.85rem;color:#666;font-weight:normal;'>{meta.get('period_label','')}</span>",
+    unsafe_allow_html=True,
+)
+
+# ── KPI strip ─────────────────────────────────────────────────────────────────
+
+k1, k2, k3, k4, k5 = st.columns(5)
+k1.metric("Total Projected Revenue", f"${total_rev:,.0f}")
+k2.metric("Avg Daily Revenue", f"${avg_daily:,.0f}")
+k3.metric("Peak Day", peak_day, help=f"${peak_val:,.2f}")
+k4.metric(
+    "Revenue Trend",
+    f"{'+' if growth_pct >= 0 else ''}{growth_pct:.1f}%",
+    delta=f"{'Growing' if growth_pct >= 0 else 'Declining'}",
+    delta_color="normal",
+)
+k5.metric(
+    "Forecast Confidence",
+    f"±{avg_band_pct:.0f}%",
+    help="Average confidence band width as % of daily predicted revenue. Lower = more certain.",
+)
+
+st.divider()
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
 
-df = pd.DataFrame(points)
-df["target_date"] = pd.to_datetime(df["target_date"])
+st.markdown("#### Revenue Prediction Chart")
 
 band = (
     alt.Chart(df)
-    .mark_area(opacity=0.20, color="#2563EB")
+    .mark_area(opacity=0.15, color="#2563EB")
     .encode(
-        x=alt.X("target_date:T", title="Date"),
+        x=alt.X("target_date:T", title="Date", axis=alt.Axis(format="%b %d")),
         y=alt.Y("yhat_lower:Q", title="Revenue ($)", axis=alt.Axis(format="$,.0f")),
         y2="yhat_upper:Q",
     )
@@ -129,52 +210,112 @@ band = (
 
 line = (
     alt.Chart(df)
-    .mark_line(color="#2563EB", strokeWidth=2)
-    .encode(
-        x=alt.X("target_date:T"),
-        y=alt.Y("predicted_revenue:Q"),
-        tooltip=[
-            alt.Tooltip("target_date:T", title="Date"),
-            alt.Tooltip("predicted_revenue:Q", title="Predicted", format="$,.2f"),
-            alt.Tooltip("yhat_lower:Q", title="Lower bound", format="$,.2f"),
-            alt.Tooltip("yhat_upper:Q", title="Upper bound", format="$,.2f"),
-        ],
-    )
-)
-
-points_layer = (
-    alt.Chart(df)
-    .mark_point(color="#2563EB", size=30, opacity=0.6)
+    .mark_line(color="#2563EB", strokeWidth=2.5)
     .encode(
         x="target_date:T",
         y="predicted_revenue:Q",
         tooltip=[
-            alt.Tooltip("target_date:T", title="Date"),
-            alt.Tooltip("predicted_revenue:Q", title="Predicted", format="$,.2f"),
+            alt.Tooltip("target_date:T", title="Date", format="%b %d, %Y"),
+            alt.Tooltip("predicted_revenue:Q", title="Predicted Revenue", format="$,.2f"),
+            alt.Tooltip("yhat_lower:Q", title="Lower Bound (90% CI)", format="$,.2f"),
+            alt.Tooltip("yhat_upper:Q", title="Upper Bound (90% CI)", format="$,.2f"),
         ],
     )
 )
 
-chart = (band + line + points_layer).properties(height=420).interactive()
+chart = (band + line).properties(height=380).interactive()
 st.altair_chart(chart, use_container_width=True)
+
+st.caption(
+    "Solid line = predicted revenue · Shaded area = 90% confidence interval · "
+    "Band widens further out as uncertainty grows"
+)
+
+st.divider()
+
+# ── Period Forecast Report ────────────────────────────────────────────────────
+
+st.markdown("#### 📋 Period Forecast Report")
+st.markdown(
+    f"*What to expect for **{meta.get('cat', 'all categories')}** "
+    f"in **{meta.get('reg', 'all regions')}** over the next **{meta.get('horizon', 90)} days***"
+)
+
+# Trend direction
+if growth_pct > 5:
+    trend_text = f"**Revenue is on an upward trend**, growing approximately **{growth_pct:.1f}%** from the start of the period to the end."
+    trend_icon = "📈"
+elif growth_pct < -5:
+    trend_text = f"**Revenue is expected to decline** by approximately **{abs(growth_pct):.1f}%** over this period."
+    trend_icon = "📉"
+else:
+    trend_text = f"**Revenue is expected to remain relatively stable**, with a minor {'increase' if growth_pct >= 0 else 'decrease'} of **{abs(growth_pct):.1f}%**."
+    trend_icon = "➡️"
+
+# Confidence interpretation
+if avg_band_pct < 20:
+    conf_text = "The model is **highly confident** in these predictions — the confidence band is tight."
+elif avg_band_pct < 40:
+    conf_text = "The model has **moderate confidence** — some variability expected but the trend direction is reliable."
+else:
+    conf_text = "The model shows **wider uncertainty** this far out — treat the trend direction as reliable, not the exact numbers."
+
+# Weekly breakdown
+df["week"] = df["target_date"].dt.to_period("W").astype(str)
+weekly = df.groupby("week").agg(
+    total=("predicted_revenue", "sum"),
+    avg=("predicted_revenue", "mean"),
+    peak=("predicted_revenue", "max"),
+).reset_index()
+
+r1, r2 = st.columns([3, 2])
+
+with r1:
+    st.markdown(
+        f"""
+{trend_icon} {trend_text}
+
+- **Total projected revenue** for this period: **${total_rev:,.0f}**
+- **Daily average**: ${avg_daily:,.0f} per day
+- **Peak expected day**: {peak_day} at ${peak_val:,.0f}
+- {conf_text}
+        """
+    )
+
+with r2:
+    st.markdown("**Weekly Revenue Breakdown**")
+    if not weekly.empty:
+        wk_chart = (
+            alt.Chart(weekly)
+            .mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4, color="#2563EB")
+            .encode(
+                x=alt.X("total:Q", title="Total ($)", axis=alt.Axis(format="$,.0f")),
+                y=alt.Y("week:N", sort=None, title=""),
+                tooltip=[
+                    alt.Tooltip("week:N", title="Week"),
+                    alt.Tooltip("total:Q", title="Total Revenue", format="$,.2f"),
+                    alt.Tooltip("avg:Q", title="Daily Avg", format="$,.2f"),
+                    alt.Tooltip("peak:Q", title="Peak Day", format="$,.2f"),
+                ],
+            )
+            .properties(height=max(120, len(weekly) * 28))
+        )
+        st.altair_chart(wk_chart, use_container_width=True)
+
+st.divider()
 
 # ── Raw table (collapsed) ─────────────────────────────────────────────────────
 
-with st.expander("📋 Raw forecast table"):
-    df_display = df.rename(
-        columns={
-            "target_date": "Date",
-            "predicted_revenue": "Predicted ($)",
-            "yhat_lower": "Lower bound ($)",
-            "yhat_upper": "Upper bound ($)",
-        }
-    )
+with st.expander("📋 Full daily forecast table"):
+    df_display = df[["target_date", "predicted_revenue", "yhat_lower", "yhat_upper"]].copy()
+    df_display["target_date"] = df_display["target_date"].dt.strftime("%Y-%m-%d")
+    df_display.columns = ["Date", "Predicted ($)", "Lower Bound ($)", "Upper Bound ($)"]
     st.dataframe(
         df_display.style.format(
             {
                 "Predicted ($)": "${:,.2f}",
-                "Lower bound ($)": "${:,.2f}",
-                "Upper bound ($)": "${:,.2f}",
+                "Lower Bound ($)": "${:,.2f}",
+                "Upper Bound ($)": "${:,.2f}",
             }
         ),
         use_container_width=True,
