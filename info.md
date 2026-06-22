@@ -56,11 +56,11 @@ CPG_analytics/
 │       ├── models.py           ← Pydantic response models
 │       ├── queries.py          ← CSV reads + DB queries; LLM context builder
 │       ├── llm.py              ← Ollama client + deterministic fallback
-│       └── routes/             ← one file per endpoint group (11 endpoints total)
+│       └── routes/             ← one file per endpoint group (13 endpoints total)
 ├── ui/
 │   ├── app.py                  ← Streamlit entry point + st.navigation
 │   ├── api_client.py           ← requests wrapper, one function per endpoint
-│   └── pages/                  ← 8 pages (see UI section below)
+│   └── pages/                  ← 9 pages (see UI section below)
 ├── tests/                      ← 64 tests across 5 files
 ├── .github/workflows/ci.yml    ← lint + test + Docker build on every push
 ├── Dockerfile.api
@@ -109,11 +109,11 @@ data/input/historical/*.xlsx    data/input/incremental/*.xlsx
         └───────────▼───────────┘
                     │
         ┌───────────▼───────────┐
-        │  FastAPI (11 endpoints)│  reads downstream CSVs + Postgres
+        │  FastAPI (13 endpoints)│  reads downstream CSVs + Postgres
         └───────────▼───────────┘
                     │
         ┌───────────▼───────────┐
-        │  Streamlit (8 pages)  │  talks only to FastAPI — never to DB directly
+        │  Streamlit (9 pages)  │  talks only to FastAPI — never to DB directly
         └───────────────────────┘
 ```
 
@@ -370,6 +370,8 @@ Re-run after every incremental ingest to incorporate the latest transactions.
 | GET | `/products` | Top SKUs by revenue with brand + category |
 | GET | `/dq-reports` | List of DQ report CSV files with per-check counts |
 | GET | `/dq-reports/{filename}` | Rejected rows from one report |
+| GET | `/db/overview` | Schema overview: all tables with row counts and column list |
+| GET | `/db/table` | Browse rows of a specific Postgres table (used by DB Explorer page) |
 | POST | `/insights` | Revenue aggregates → LLM narrative (fallback if Ollama down) |
 | POST | `/ask` | Free-text Q&A — bounded context only; raw rows never sent to LLM |
 
@@ -380,6 +382,8 @@ curl http://localhost:8000/summary
 curl "http://localhost:8000/forecast?category=Beverages&region=NORTHEAST&horizon=30"
 curl "http://localhost:8000/products?limit=10"
 curl http://localhost:8000/dq-reports
+curl http://localhost:8000/db/overview
+curl "http://localhost:8000/db/table?table=forecast_results&limit=10"
 curl -X POST http://localhost:8000/insights
 curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \

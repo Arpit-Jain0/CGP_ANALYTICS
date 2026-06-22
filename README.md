@@ -10,10 +10,10 @@ A production-skeleton that a team can clone, run, and extend. It covers:
 
 - **Ingestion** — config-driven Excel → Postgres + CSV pipeline with pre-ingestion DQ validation
 - **Forecasting** — Facebook Prophet, one model per (category × region) pair, 90-day horizon with 90% CI bands
-- **API** — FastAPI with 11 endpoints; OpenAPI docs auto-generated at `/docs`
-- **UI** — Streamlit dashboard (7 pages): Dashboard, Forecast, AI Insights, DQ Reports, Data Loads, DB Explorer
+- **API** — FastAPI with 13 endpoints; OpenAPI docs auto-generated at `/docs`
+- **UI** — Streamlit dashboard (9 pages): Home, Dashboard, Forecast, AI Insights, DQ Reports, Data Loads, DB Explorer, Architecture, Test Coverage
 - **LLM Q&A** — Ollama (local, offline); deterministic fallback if Ollama is not running
-- **Tests** — 58 unit + integration tests; DB-dependent tests gated on `TEST_DATABASE_URL`
+- **Tests** — 64 tests (58 pass without DB, 6 integration tests gated on `TEST_DATABASE_URL`)
 - **CI** — GitHub Actions: lint (Ruff + Black), tests with coverage, Docker image build check
 
 ---
@@ -86,7 +86,7 @@ TEST_DATABASE_URL=postgresql+psycopg2://cpg:changeme@localhost:5432/cpg_analytic
 pytest tests/ --cov=src --cov-report=term-missing
 ```
 
-58 tests, 6 skipped (integration tests — skip when `TEST_DATABASE_URL` is not set).
+64 tests total: 58 pass without any infrastructure, 6 integration tests skip when `TEST_DATABASE_URL` is not set (they run automatically in CI).
 
 ---
 
@@ -126,7 +126,7 @@ CPG_analytics/                ← repo root (clone lands here)
 ├── ui/
 │   ├── app.py                ← Streamlit entry point + st.navigation
 │   ├── api_client.py         ← thin requests wrapper (one function per endpoint)
-│   └── pages/                ← 8 pages (home, dashboard, forecast, insights, dq_reports,
+│   └── pages/                ← 9 pages (home, dashboard, forecast, insights, dq_reports,
 │                                          data_loads, database, architecture, test_coverage)
 ├── tests/                    ← 64 tests (58 pass, 6 skip without TEST_DATABASE_URL)
 ├── .github/workflows/ci.yml  ← lint + test + Docker build check on every push
@@ -145,7 +145,7 @@ CPG_analytics/                ← repo root (clone lands here)
 | Task | Where to change |
 |---|---|
 | Add a new Excel source | Add an entry to `config/ingestion.json` — no Python changes |
-| Add a new DQ rule | `src/ingestion/dq/checker.py` |
+| Add a new DQ rule | `src/dq/checker.py` |
 | Add a new API endpoint | `src/api/routes/<name>.py` + wire in `src/api/main.py` |
 | Add a Prophet regressor | `src/forecasting/forecaster.py` — follow `build_promo_feature()` pattern |
 | Add a new UI page | `ui/pages/<name>.py` + `st.Page(...)` entry in `ui/app.py` |
@@ -155,7 +155,4 @@ CPG_analytics/                ← repo root (clone lands here)
 
 ## Further reading
 
-- [info.md](info.md) — full platform reference: architecture, all commands, data flow diagrams
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — onboarding guide for new engineers
-- [docs/adr/](docs/adr/) — Architecture Decision Records
-- [docs/llm_options.md](docs/llm_options.md) — LLM provider options and trade-offs
+- [info.md](info.md) — full platform reference: architecture, all commands, data flow diagrams, design decisions
