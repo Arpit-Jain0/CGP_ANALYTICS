@@ -20,25 +20,28 @@ A production-skeleton that a team can clone, run, and extend. It covers:
 
 ## Quick start — Docker Compose (recommended)
 
-```bash
-git clone <repo-url>
-cd <repo-folder>
-cp .env.example .env          # defaults work out of the box; no keys required
+**Prerequisites:** Docker Desktop (no Python needed on the host)
 
-docker compose up --build     # starts postgres + ollama + api + ui
+```bash
+git clone https://github.com/Arpit-Jain0/CGP_ANALYTICS.git
+cd CGP_ANALYTICS
+cp .env.example .env          # defaults work out of the box; no keys required
+docker compose up --build     # builds images and starts all 5 services
 ```
 
-First-time only — generate synthetic data and run the pipeline:
+> **First run:** Docker builds the images (~2–3 min), then Ollama pulls `llama3.1` (~4.7 GB). The API starts immediately with a deterministic fallback while the model downloads. Subsequent starts take ~10 seconds.
+
+**Open a second terminal** and run these once to load data:
 
 ```bash
-# Generate Excel input files (run on the host, from the repo root)
-python3 scripts/generate_data.py
+# 1. Generate synthetic Excel files (written to data/input/)
+docker compose exec api python3 scripts/generate_data.py
 
-# Ingest historical data + incremental batches
+# 2. Ingest data into Postgres + write downstream CSVs
 docker compose exec api python3 -m src.ingestion.pipeline --mode historical
 docker compose exec api python3 -m src.ingestion.pipeline --mode incremental
 
-# Train Prophet models (writes to forecast_results table)
+# 3. Train Prophet models (writes forecast rows to Postgres)
 docker compose exec api python3 -m src.forecasting.forecaster
 ```
 
@@ -49,25 +52,33 @@ docker compose exec api python3 -m src.forecasting.forecaster
 | Postgres | localhost:5432 |
 | Ollama | http://localhost:11434 |
 
-> **First run:** Ollama downloads `llama3.1` (~4.7 GB) and caches it in a Docker volume. Subsequent starts take ~10 seconds. The API uses a deterministic fallback while the model is downloading.
-
 ---
 
 ## Quick start — local dev (no Docker for app services)
 
+**Prerequisites:** Python 3.11+, Docker Desktop (for Postgres only)
+
 ```bash
-# Prerequisites: Python 3.11+, Docker Desktop (for Postgres only)
+git clone https://github.com/Arpit-Jain0/CGP_ANALYTICS.git
+cd CGP_ANALYTICS
 cp .env.example .env
 pip install -e ".[dev]"
 
 docker compose up postgres -d            # only Postgres in Docker
 
 python3 scripts/generate_data.py         # create Excel input files
-python3 -m src.ingestion.pipeline        # run full pipeline
+python3 -m src.ingestion.pipeline        # ingest all data (historical + incremental)
 python3 -m src.forecasting.forecaster    # train Prophet models
+```
 
-uvicorn src.api.main:app --reload --port 8000   # Terminal 2
-streamlit run ui/app.py                          # Terminal 3
+Then in two more terminals:
+
+```bash
+# Terminal 2
+uvicorn src.api.main:app --reload --port 8000
+
+# Terminal 3
+streamlit run ui/app.py
 ```
 
 ---
@@ -103,7 +114,7 @@ black src tests           # auto-format
 ## Project layout
 
 ```
-CPG_analytics/                ← repo root (clone lands here)
+CGP_ANALYTICS/                ← repo root (clone lands here)
 ├── config/
 │   └── ingestion.json        ← all file/sheet routing rules (zero Python hardcoding)
 ├── data/
