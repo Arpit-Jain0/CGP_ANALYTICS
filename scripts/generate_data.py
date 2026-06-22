@@ -874,11 +874,11 @@ def generate_weekly_batch(
                        (Schema B: order_id / order_datetime / location_id /
                         product_sku / units / price_per_unit / currency)
 
-    Idempotent: if the file already exists for this week, returns immediately
-    with ``{"status": "exists", ...}`` and does **not** overwrite the file.
+    Any existing ``*_pos.xlsx`` or ``*_online.xlsx`` files in the incremental
+    folder are deleted before writing so only the latest batch is kept.
 
     Returns a dict with keys:
-        status      "created" | "exists"
+        status      "created"
         batch_type  the type that was requested
         file        filename (not full path)
         path        absolute path to the file
@@ -902,16 +902,9 @@ def generate_weekly_batch(
     fname = f"{week_start}_{batch_type}.xlsx"
     fpath = incr_dir / fname
 
-    if fpath.exists():
-        return {
-            "status": "exists",
-            "batch_type": batch_type,
-            "file": fname,
-            "path": str(fpath.resolve()),
-            "week_start": str(week_start),
-            "rows": 0,
-            "dq": {},
-        }
+    # Remove any existing files of this type so only the latest batch is kept.
+    for old in incr_dir.glob(f"*_{batch_type}.xlsx"):
+        old.unlink()
 
     # Seed: deterministic per (week_start, batch_type) so re-running the same
     # week always produces the same file — useful for debugging.

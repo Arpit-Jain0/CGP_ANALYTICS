@@ -44,8 +44,8 @@ def generate_batch(
     - **type=pos**    → writes `{YYYY-MM-DD}_pos.xlsx` with a `Sales` sheet
     - **type=online** → writes `{YYYY-MM-DD}_online.xlsx` with an `Orders` sheet
 
-    Returns immediately with `status="exists"` if the file already exists
-    for this week — no file is overwritten.
+    Any existing `*_pos.xlsx` or `*_online.xlsx` files in the incremental
+    folder are deleted first so only the latest batch is kept.
     """
     if _gen_batch is None:
         raise HTTPException(
