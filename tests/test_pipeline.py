@@ -148,8 +148,8 @@ def test_currency_string_normalised():
     assert pd.api.types.is_numeric_dtype(result["amount"]), "amount should be numeric"
     assert float(result["amount"].iloc[0]) == pytest.approx(1234.56)
     assert float(result["amount"].iloc[1]) == pytest.approx(2000.00)
-    # store_id is an ID column — should stay as string
-    assert result["store_id"].dtype == object
+    # store_id is an ID column — must stay as a string dtype (object or StringDtype)
+    assert pd.api.types.is_string_dtype(result["store_id"])
 
 
 def test_whitespace_stripped_from_strings():

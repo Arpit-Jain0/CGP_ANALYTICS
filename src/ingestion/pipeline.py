@@ -84,12 +84,12 @@ def clean_dataframe(df: pd.DataFrame, settings: PipelineSettings) -> pd.DataFram
     df.columns = [str(c).strip().lower() for c in df.columns]
     df = df.replace(settings.null_values, pd.NA)
     df = df.dropna(how="all").reset_index(drop=True)
-    for col in df.select_dtypes(include="object").columns:
+    for col in df.select_dtypes(include=["object", "string"]).columns:
         df[col] = df[col].apply(lambda x: x.strip() if isinstance(x, str) else x)
     for col in df.columns:
         if any(kw in col for kw in _DATE_KEYWORDS):
             df[col] = _try_parse_dates(df[col], settings.date_formats)
-    for col in df.select_dtypes(include="object").columns:
+    for col in df.select_dtypes(include=["object", "string"]).columns:
         if not any(kw in col for kw in _ID_KEYWORDS):
             df[col] = _try_numeric(df[col])
     return df

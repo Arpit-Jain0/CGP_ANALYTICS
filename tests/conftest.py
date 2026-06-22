@@ -229,15 +229,14 @@ def db_engine():
     schema_path = Path(__file__).resolve().parents[1] / "db" / "init" / "01_schema.sql"
     ddl = schema_path.read_text(encoding="utf-8")
 
-    def _has_sql(fragment: str) -> bool:
-        return any(
-            line.strip() and not line.strip().startswith("--") for line in fragment.splitlines()
-        )
+    # Strip -- line comments before splitting so semicolons inside comments
+    # don't produce garbage fragments (e.g. "created first; other tables…").
+    ddl_clean = "\n".join(line.partition("--")[0] for line in ddl.splitlines())
 
     with engine.connect() as conn:
-        for stmt in ddl.split(";"):
+        for stmt in ddl_clean.split(";"):
             stmt = stmt.strip()
-            if stmt and _has_sql(stmt):
+            if stmt:
                 conn.execute(text(stmt))
         conn.commit()
 
