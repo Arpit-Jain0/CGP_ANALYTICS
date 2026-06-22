@@ -33,11 +33,15 @@ data/output/processed/*
 data/output/downstream/*
 data/output/quality_reports/*
 data/output/archive/*
+data/archive/
 # Keep folder structure
 !data/output/processed/.gitkeep
 !data/output/downstream/.gitkeep
 !data/output/quality_reports/.gitkeep
 !data/output/archive/.gitkeep
+
+# Claude Code local state (session memory — not project content)
+.claude/
 
 # Input data workbooks (potentially large / proprietary)
 data/input/historical/*.xlsx
