@@ -324,3 +324,65 @@ CREATE TABLE IF NOT EXISTS curated.product_updates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cur_prod_upd_sku ON curated.product_updates(sku);
+
+
+-- =============================================================================
+-- PUBLIC ANALYTICS LAYER  (public.*)
+-- Denormalised, analytics-ready tables written by the ingestion pipeline and
+-- queried directly by the API + integration tests.
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- dim_region
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS dim_region (
+    region  TEXT PRIMARY KEY
+);
+
+-- ---------------------------------------------------------------------------
+-- dim_store
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS dim_store (
+    store_id    TEXT PRIMARY KEY,
+    region      TEXT,
+    city        TEXT,
+    store_type  TEXT
+);
+
+-- ---------------------------------------------------------------------------
+-- dim_product  (SCD Type-2 — full history kept, is_current marks active row)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS dim_product (
+    product_id  BIGSERIAL   PRIMARY KEY,
+    sku         TEXT        NOT NULL,
+    category    TEXT,
+    brand       TEXT,
+    valid_from  DATE,
+    valid_to    DATE,
+    is_current  BOOLEAN     NOT NULL DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_dim_product_sku ON dim_product(sku);
+
+-- ---------------------------------------------------------------------------
+-- sales_transactions  (analytics fact table — typed, deduplicated)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sales_transactions (
+    transaction_id   TEXT        PRIMARY KEY,
+    transaction_ts   TIMESTAMPTZ,
+    store_id         TEXT,
+    sku              TEXT,
+    quantity         NUMERIC(12, 4),
+    unit_price       NUMERIC(12, 4),
+    revenue          NUMERIC(14, 4),
+    currency         TEXT,
+    source_system    TEXT,
+    source_file      TEXT,
+    is_late_arriving BOOLEAN     NOT NULL DEFAULT FALSE,
+    _load_batch_id   INTEGER     REFERENCES load_batch(load_batch_id),
+    _ingested_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_txn_ts    ON sales_transactions(transaction_ts);
+CREATE INDEX IF NOT EXISTS idx_txn_store ON sales_transactions(store_id);
+CREATE INDEX IF NOT EXISTS idx_txn_sku   ON sales_transactions(sku);
