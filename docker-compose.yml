@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -29,16 +27,17 @@ services:
     volumes:
       - ollama_data:/root/.ollama   # model weights persist across restarts
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      # ollama/ollama does not ship curl; use the ollama CLI to probe the server
+      test: ["CMD", "ollama", "list"]
       interval: 15s
       timeout: 10s
       retries: 8
       start_period: 30s
 
   # ── ollama-init — pulls the model once and exits ──────────────────────────
-  # Runs after ollama is healthy; API starts in parallel and uses fallback
-  # responses until the model download completes (typically 5–15 minutes on
-  # first run). Subsequent starts skip the pull if the model is cached.
+  # Runs after ollama is healthy; API starts in parallel and uses deterministic
+  # fallback responses until the download completes (5–15 min first run).
+  # Subsequent starts skip the pull if the model is already cached.
   ollama-init:
     image: ollama/ollama
     depends_on:
@@ -64,8 +63,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # API has a built-in fallback when Ollama is not yet ready, so we only
+      # wait for the service to start — not for it to be fully healthy.
+      # This means the API is up in ~60s even if the model is still downloading.
       ollama:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./data:/app/data
       - ./config:/app/config:ro

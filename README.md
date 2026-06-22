@@ -20,7 +20,9 @@ A production-skeleton that a team can clone, run, and extend. It covers:
 
 ## Quick start — Docker Compose (recommended)
 
-**Prerequisites:** Docker Desktop (no Python needed on the host)
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and **running** (no Python needed on the host)
+
+> **Before anything else:** open Docker Desktop and wait for the whale icon in your taskbar/menu bar to show "Docker Desktop is running". Every `docker` command fails if the daemon is not started.
 
 ```bash
 git clone https://github.com/Arpit-Jain0/CGP_ANALYTICS.git
@@ -37,7 +39,7 @@ docker compose up --build     # builds images and starts all 5 services
 # 1. Generate synthetic Excel files (written to data/input/)
 docker compose exec api python3 scripts/generate_data.py
 
-# 2. Ingest data into Postgres + write downstream CSVs
+# 2. Ingest data into Postgres
 docker compose exec api python3 -m src.ingestion.pipeline --mode historical
 docker compose exec api python3 -m src.ingestion.pipeline --mode incremental
 
@@ -56,7 +58,7 @@ docker compose exec api python3 -m src.forecasting.forecaster
 
 ## Quick start — local dev (no Docker for app services)
 
-**Prerequisites:** Python 3.11+, Docker Desktop (for Postgres only)
+**Prerequisites:** Python 3.11+, [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and **running**
 
 ```bash
 git clone https://github.com/Arpit-Jain0/CGP_ANALYTICS.git
@@ -64,7 +66,7 @@ cd CGP_ANALYTICS
 cp .env.example .env
 pip install -e ".[dev]"
 
-docker compose up postgres -d            # only Postgres in Docker
+docker compose up postgres -d            # only Postgres in Docker (Docker Desktop must be running)
 
 python3 scripts/generate_data.py         # create Excel input files
 python3 -m src.ingestion.pipeline        # ingest all data (historical + incremental)
