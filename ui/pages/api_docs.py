@@ -21,7 +21,7 @@ st.caption(
 # ── Status check ──────────────────────────────────────────────────────────────
 
 try:
-    api_client.get_health()
+    api_client.health()
     st.success("API is online", icon="✅")
 except Exception:
     st.error("❌ Cannot reach the API — start it with: `docker compose up api`")
