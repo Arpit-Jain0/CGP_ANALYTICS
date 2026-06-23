@@ -43,6 +43,7 @@ pg = st.navigation(
         "Operations": [
             st.Page("pages/data_loads.py", title="Data Loads", icon="🔄"),
             st.Page("pages/database.py", title="Database Explorer", icon="🗄️"),
+            st.Page("pages/api_docs.py", title="API Docs", icon="🔌"),
             st.Page("pages/architecture.py", title="Architecture & Flow", icon="🏗️"),
             st.Page("pages/test_coverage.py", title="Test Coverage", icon="🧪"),
         ],
